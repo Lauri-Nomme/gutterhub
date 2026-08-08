@@ -57,19 +57,27 @@ Run it inside your build agent after generating a coverage report. It expects a 
 # e.g. ./gutterhub-push.sh $GIT_COMMIT coverage-summary.json origin
 ```
 
-The script writes the JSON into the git object store as a loose blob (`git hash-object -w`), points `refs/gutterhub/<SHA>` at it (`git update-ref`), and force-pushes **only** that namespace to the remote.
+The script writes the JSON into the git object store as a loose blob, packages it into a single-file root commit, points `refs/gutterhub/<SHA>` at that commit (`git update-ref`), and force-pushes **only** that namespace to the remote. See ["How the git ref is wired"](#how-the-git-ref-is-wired) below.
 
 ### 2. Browser side (`gutterhub.user.js`)
 
 Install `gutterhub.user.js` in Tampermonkey, Greasemonkey, or Violentmonkey (the `@match` rules cover `github.com` and GitHub Enterprise at `*.github.com`). When a developer opens a PR page, the script:
 
 1. Reads `owner`/`repo` from the URL and the target commit from `<meta name="expected-head-sha">`.
-2. Fetches the coverage matrix from `https://github.com/<owner>/<repo>/raw/refs/gutterhub/<sha>` using the browser's own session cookies.
+2. Fetches the coverage matrix from `https://raw.githubusercontent.com/<owner>/<repo>/refs/gutterhub/<sha>/coverage.json` using the browser's own session cookies.
 3. Paints a green left-border (`#2ea44f`) on covered lines and red (`#cb2431`) on missed lines in both split and unified diff views, re-running via a `MutationObserver` as the diff lazy-loads while scrolling.
 
-## The git-ref caveat
+## How the git ref is wired
 
-The design points a ref directly at a blob (`refs/gutterhub/<SHA>` → loose blob) and fetches it via GitHub's `raw` route with no trailing path. This works with Git semantics, but it depends on GitHub serving blobs for arbitrary refs — verify it with a one-off `curl` against your GitHub Enterprise instance before relying on it in production (the E2E test below mocks this endpoint).
+The ref at `refs/gutterhub/<SHA>` points at a dedicated **root commit** whose tree holds a single `coverage.json` file. This is deliberate: GitHub's raw routes return **404** for refs that point directly at a bare blob (verified empirically during development), but resolve a ref → commit → path fine via `raw.githubusercontent.com`. So the pusher commits a lightweight tree+commit for every coverage payload, content-addressed and immutable:
+
+```bash
+BLOB_ID=$(git hash-object -w coverage.json)
+TREE_ID=$(printf '100644 blob %s\tcoverage.json\n' "$BLOB_ID" | git mktree)
+COVERAGE_COMMIT=$(git commit-tree "$TREE_ID" -m "gutterhub: coverage metadata for <sha>")
+git update-ref "refs/gutterhub/<sha>" "$COVERAGE_COMMIT"
+git push origin "refs/gutterhub/<sha>" --force
+```
 
 ## How to test it
 

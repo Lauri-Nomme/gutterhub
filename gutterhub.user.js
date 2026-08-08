@@ -43,8 +43,10 @@
      * browser cookie authentication (zero PAT configuration).
      */
     async function fetchCoverageData(owner, repo, commitSha) {
-        // Accesses the isolated blob reference written by the CI pusher script.
-        const targetUrl = `https://github.com/${owner}/${repo}/raw/refs/gutterhub/${commitSha}`;
+        // Accesses the isolated reference written by the CI pusher script. The
+        // ref points at a root commit whose tree holds `coverage.json`; this
+        // URL shape is what GitHub's raw CDN can resolve with browser cookies.
+        const targetUrl = `https://raw.githubusercontent.com/${owner}/${repo}/refs/gutterhub/${commitSha}/coverage.json`;
 
         try {
             const response = await fetch(targetUrl);
