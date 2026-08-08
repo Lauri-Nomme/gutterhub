@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="expected-head-sha" content="5aa37f4b8c9d2e1f0a3b4c5d6e7f8a9b0c1d2e3f4">
+    <title>Pull Request #42</title>
+</head>
+<body>
+    <h1>PR #42: src/calc.js coverage</h1>
+
+    <!-- File 1: HAS coverage data -->
+    <div class="js-file">
+        <div class="file-header">
+            <a class="link-gray-dark" href="/acme/widgets/blob/head/src/calc.js">src/calc.js</a>
+        </div>
+        <div class="js-file-content">
+            <table>
+                <tbody>
+                    <tr><td class="blob-num" data-line-number="1"></td><td class="blob-code"><div class="blob-code-inner">export const add = (a, b) =&gt; a + b;</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="2"></td><td class="blob-code"><div class="blob-code-inner"></div></td></tr>
+                    <tr><td class="blob-num" data-line-number="3"></td><td class="blob-code"><div class="blob-code-inner">export const sub = (a, b) =&gt; a - b;</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="4"></td><td class="blob-code"><div class="blob-code-inner">export const mul = (a, b) =&gt; a * b;</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="5"></td><td class="blob-code"><div class="blob-code-inner">export const div = (a, b) =&gt; {</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="6"></td><td class="blob-code"><div class="blob-code-inner">  if (b === 0) {</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="7"></td><td class="blob-code"><div class="blob-code-inner">    throw new Error("division by zero");</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="8"></td><td class="blob-code"><div class="blob-code-inner">  }</div></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- File 2: NO coverage data -> must remain untouched -->
+    <div class="js-file">
+        <div class="file-header">
+            <a class="link-gray-dark" href="/acme/widgets/blob/head/src/README.md">src/README.md</a>
+        </div>
+        <div class="js-file-content">
+            <table>
+                <tbody>
+                    <tr><td class="blob-num" data-line-number="1"></td><td class="blob-code"><div class="blob-code-inner"># Widgets</div></td></tr>
+                    <tr><td class="blob-num" data-line-number="2"></td><td class="blob-code"><div class="blob-code-inner">Docs only.</div></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

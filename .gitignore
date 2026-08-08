@@ -1,0 +1,7 @@
+# Dependencies
+node_modules/
+test/node_modules/
+
+# Playwright / browser artifacts
+test/.playwright/
+*.log

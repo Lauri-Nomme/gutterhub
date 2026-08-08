@@ -1,0 +1,8 @@
+{
+  "files": {
+    "src/calc.js": {
+      "covered": [1, 2, 3, 4, 8],
+      "missed": [5, 6, 7]
+    }
+  }
+}
