@@ -140,54 +140,50 @@
         });
     }
 
-    /**
-     * GitHb collapses each diff file to hunks with sparse context, so only a few
-     * lines are in the DOM. Expand collapsed file headers and per-hunk "show
-     * more" controls so every covered line is actually renderable, then let the
-     * MutationObserver paint the newly added rows. Idempotent: already-expanded
-     * controls are skipped; expanded files report aria-expanded="true".
-     */
-    function expandDiffFiles() {
-        // 1. Open any wholly-collapsed file (header chevron).
-        document.querySelectorAll('.js-file .js-details-target[aria-expanded="false"]')
-            .forEach((btn) => { try { btn.click(); } catch (e) { /* noop */ } });
-
-        // 2. Reveal the full line range of each hunk (top/bottom "show more").
-        document.querySelectorAll('.js-file [data-expand-hunk], .js-file .js-hunks-expander, .js-file .diff-hunk-expander')
-            .forEach((btn) => { try { btn.click(); } catch (e) { /* noop */ } });
-    }
+    // Cached coverage matrix and a guard against re-fetch loops while the PR
+    // head SHA is unchanged.
+    let coverageData = null;
+    let fetchInFlightFor = null;
 
     /**
-     * Initialization Core Orchestrator. Waits for the DOM to be interactive if
-     * the script is injected early (e.g. via `@run-at document-start` or a test
-     * harness); Tampermonkey's `@run-at document-end` runs after this anyway.
+     * Re-rasterizes whenever the DOM changes. Fetch is async, so we kick it off
+     * on the first sighting of a usable PR head SHA and cache the result; after
+     * that only the cheap paint pass runs per mutation (the diff renders lazily
+     * as GitHub re-renders / you scroll).
      */
-    async function initializeGutterHub() {
+    function onChange() {
         const meta = getPullRequestMetadata();
         if (!meta.owner || !meta.repo || !meta.commitSha) return;
 
-        const coverageMatrix = await fetchCoverageData(meta.owner, meta.repo, meta.commitSha);
-        if (!coverageMatrix) return;
-
-        // Reveal the whole file so gutters can be painted on every line.
-        expandDiffFiles();
-
-        // Perform initial painting run.
-        paintGutterUI(coverageMatrix);
-
-        // Observe the DOM to seamlessly handle dynamic content re-rendering on
-        // long scrolls and lazy-loaded diff sections.
-        const observer = new MutationObserver(() => {
-            expandDiffFiles();
-            paintGutterUI(coverageMatrix);
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
+        if (!coverageData) {
+            // Metadata may appear after the very first pass runs (the diff tab
+            // hydrates some DOM asynchronously). Fetch once, then paint.
+            if (fetchInFlightFor === meta.commitSha) return;
+            fetchInFlightFor = meta.commitSha;
+            fetchCoverageData(meta.owner, meta.repo, meta.commitSha).then((matrix) => {
+                if (matrix) coverageData = matrix;
+                paintGutterUI(coverageData);
+            });
+            return;
+        }
+        paintGutterUI(coverageData);
     }
 
-    // Launch GutterHub execution core.
+    // Watch the whole document and re-rasterize on changes, debounced so the
+    // initial hydration (which fires many rapid mutations) doesn't thrash.
+    // Observe documentElement (present at script-eval time) rather than body,
+    // which is null before the HTML is parsed.
+    let timer = null;
+    const observer = new MutationObserver(() => {
+        if (timer) return;
+        timer = setTimeout(() => { timer = null; onChange(); }, 120);
+    });
+    observer.observe(document.documentElement || document, { childList: true, subtree: true });
+
+    // Initial attempt (also covers the case where metadata is already present).
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeGutterHub);
+        document.addEventListener('DOMContentLoaded', onChange);
     } else {
-        initializeGutterHub();
+        onChange();
     }
 })();
