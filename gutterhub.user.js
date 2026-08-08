@@ -27,14 +27,22 @@
         const repo = pathSegments[2];
 
         // Target selector maps to GitHub's modern merge commit state or
-        // individual split-diff meta fields.
-        const shaElement = document.querySelector('meta[name="expected-head-sha"]') ||
-            document.querySelector('.sha-block .sha');
+        // individual split-diff meta fields. On current GitHub the
+        // `expected-head-sha` meta is absent from the diff tab; the PR head
+        // commit instead lives on the `.js-details-target`-adjacent
+        // `<a data-commit="<full sha>">` in the "..." commit-range menu.
+        const shaElement = document.querySelector('meta[name="expected-head-sha"]')
+            || document.querySelector('.sha-block .sha')
+            || document.querySelector('[data-commit]');
 
         return {
             owner,
             repo,
-            commitSha: shaElement ? shaElement.content || shaElement.textContent.trim() : null
+            commitSha: shaElement
+                ? shaElement.content
+                    || shaElement.getAttribute('data-commit')
+                    || (shaElement.textContent || '').trim()
+                : null
         };
     }
 
@@ -99,10 +107,15 @@
             // Traverse up to pull the exact file name path from the header.
             const file = container.closest('.js-file');
             if (!file) return;
-            const fileHeader = file.querySelector('.link-gray-dark, .js-blob-full-path');
-            if (!fileHeader) return;
 
-            const filePath = fileHeader.textContent.trim();
+            // Modern GitHub exposes the path on the header via data-path; older
+            // builds used a textual link.
+            const fileHeader = file.querySelector('.file-header, .js-file-header');
+            let filePath = fileHeader ? fileHeader.getAttribute('data-path') || '' : '';
+            if (!filePath) {
+                const txt = file.querySelector('.link-gray-dark, .js-blob-full-path');
+                if (txt) filePath = txt.textContent.trim();
+            }
             const fileCoverage = coverageData.files[filePath];
             if (!fileCoverage) return;
 
@@ -128,6 +141,23 @@
     }
 
     /**
+     * GitHb collapses each diff file to hunks with sparse context, so only a few
+     * lines are in the DOM. Expand collapsed file headers and per-hunk "show
+     * more" controls so every covered line is actually renderable, then let the
+     * MutationObserver paint the newly added rows. Idempotent: already-expanded
+     * controls are skipped; expanded files report aria-expanded="true".
+     */
+    function expandDiffFiles() {
+        // 1. Open any wholly-collapsed file (header chevron).
+        document.querySelectorAll('.js-file .js-details-target[aria-expanded="false"]')
+            .forEach((btn) => { try { btn.click(); } catch (e) { /* noop */ } });
+
+        // 2. Reveal the full line range of each hunk (top/bottom "show more").
+        document.querySelectorAll('.js-file [data-expand-hunk], .js-file .js-hunks-expander, .js-file .diff-hunk-expander')
+            .forEach((btn) => { try { btn.click(); } catch (e) { /* noop */ } });
+    }
+
+    /**
      * Initialization Core Orchestrator. Waits for the DOM to be interactive if
      * the script is injected early (e.g. via `@run-at document-start` or a test
      * harness); Tampermonkey's `@run-at document-end` runs after this anyway.
@@ -139,12 +169,18 @@
         const coverageMatrix = await fetchCoverageData(meta.owner, meta.repo, meta.commitSha);
         if (!coverageMatrix) return;
 
+        // Reveal the whole file so gutters can be painted on every line.
+        expandDiffFiles();
+
         // Perform initial painting run.
         paintGutterUI(coverageMatrix);
 
         // Observe the DOM to seamlessly handle dynamic content re-rendering on
         // long scrolls and lazy-loaded diff sections.
-        const observer = new MutationObserver(() => paintGutterUI(coverageMatrix));
+        const observer = new MutationObserver(() => {
+            expandDiffFiles();
+            paintGutterUI(coverageMatrix);
+        });
         observer.observe(document.body, { childList: true, subtree: true });
     }
 
