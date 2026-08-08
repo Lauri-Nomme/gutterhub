@@ -28,47 +28,62 @@
 
         // Target selector maps to GitHub's modern merge commit state or
         // individual split-diff meta fields. On current GitHub the
-        // `expected-head-sha` meta is absent from the diff tab; the PR head
-        // commit instead lives on the `.js-details-target`-adjacent
-        // `<a data-commit="<full sha>">` in the "..." commit-range menu.
-        const shaElement = document.querySelector('meta[name="expected-head-sha"]')
-            || document.querySelector('.sha-block .sha')
-            || document.querySelector('[data-commit]');
+        // `expected-head-sha` meta is absent from the diff tab, so the PR head
+        // commit is gathered from every plausible in-page source instead.
+        // (The commit-range "..."" menu may, after force-pushed branches, list
+        // more than one commit; only the one with published coverage will
+        // resolve, so we collect all candidates and try them in order.)
+        const shaCandidates = new Set();
+        const meta = document.querySelector('meta[name="expected-head-sha"]');
+        if (meta && meta.content && /^[0-9a-f]{40}$/.test(meta.content)) shaCandidates.add(meta.content);
+
+        document.querySelectorAll('[data-commit]').forEach((el) => {
+            const v = el.getAttribute('data-commit');
+            if (v && /^[0-9a-f]{40}$/.test(v)) shaCandidates.add(v);
+        });
+
+        document.querySelectorAll('a[href*="/commit/"]').forEach((el) => {
+            const m = (el.getAttribute('href') || '').match(/\/([0-9a-f]{40})$/);
+            if (m) shaCandidates.add(m[1]);
+        });
+
+        const shaBlock = document.querySelector('.sha-block .sha');
+        if (shaBlock) {
+            const t = (shaBlock.textContent || '').trim();
+            if (/^[0-9a-f]{40}$/.test(t)) shaCandidates.add(t);
+        }
 
         return {
             owner,
             repo,
-            commitSha: shaElement
-                ? shaElement.content
-                    || shaElement.getAttribute('data-commit')
-                    || (shaElement.textContent || '').trim()
-                : null
+            commitShas: [...shaCandidates]
         };
     }
 
     /**
      * Fetches the raw JSON coverage matrix via GitHub's Git Raw API using
-     * browser cookie authentication (zero PAT configuration).
+     * browser cookie authentication (zero PAT configuration). Tries every
+     * candidate PR head SHA; only the one a CI run published coverage for
+     * resolves, so the first that 200s wins.
      */
-    async function fetchCoverageData(owner, repo, commitSha) {
-        // Accesses the isolated reference written by the CI pusher script. The
-        // ref points at a root commit whose tree holds `coverage.json`; this
-        // URL shape is what GitHub's raw CDN can resolve with browser cookies.
-        const targetUrl = `https://raw.githubusercontent.com/${owner}/${repo}/refs/gutterhub/${commitSha}/coverage.json`;
+    async function fetchCoverageData(owner, repo, commitShas) {
+        for (const sha of commitShas) {
+            // Accesses the isolated reference written by the CI pusher script.
+            // The ref points at a root commit whose tree holds `coverage.json`;
+            // this URL shape is what GitHub's raw CDN can resolve with browser
+            // cookies.
+            const targetUrl = `https://raw.githubusercontent.com/${owner}/${repo}/refs/gutterhub/${sha}/coverage.json`;
 
-        try {
-            const response = await fetch(targetUrl);
-            if (!response.ok) {
-                if (response.status === 404) {
-                    console.log('GutterHub: No coverage metadata found for this commit reference context.');
-                }
-                return null;
+            try {
+                const response = await fetch(targetUrl);
+                if (!response.ok) continue;
+                return await response.json();
+            } catch (error) {
+                console.error('GutterHub: Coverage matrix request failed:', error);
             }
-            return await response.json();
-        } catch (error) {
-            console.error('GutterHub: Critical failure downloading coverage reference matrix:', error);
-            return null;
         }
+        console.log('GutterHub: No coverage metadata found for these commit reference contexts.');
+        return null;
     }
 
     /**
@@ -153,14 +168,14 @@
      */
     function onChange() {
         const meta = getPullRequestMetadata();
-        if (!meta.owner || !meta.repo || !meta.commitSha) return;
+        if (!meta.owner || !meta.repo || !meta.commitShas.length) return;
 
         if (!coverageData) {
             // Metadata may appear after the very first pass runs (the diff tab
             // hydrates some DOM asynchronously). Fetch once, then paint.
-            if (fetchInFlightFor === meta.commitSha) return;
-            fetchInFlightFor = meta.commitSha;
-            fetchCoverageData(meta.owner, meta.repo, meta.commitSha).then((matrix) => {
+            if (fetchInFlightFor === meta.commitShas.join(',')) return;
+            fetchInFlightFor = meta.commitShas.join(',');
+            fetchCoverageData(meta.owner, meta.repo, meta.commitShas).then((matrix) => {
                 if (matrix) coverageData = matrix;
                 paintGutterUI(coverageData);
             });
