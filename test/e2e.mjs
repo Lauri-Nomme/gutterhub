@@ -11,9 +11,9 @@
  *
  * The trick: we register a route for the raw-ref URL pattern and fulfill it
  * with the fixture coverage matrix. The userscript calls
- * `fetch('https://github.com/acme/widgets/raw/refs/gutterhub/<sha>')` and Playwright
- * intercepts it, so the script behaves exactly as it would in a real browser that
- * is authed to GitHub.
+ * `fetch('https://raw.githubusercontent.com/acme/widgets/refs/gutterhub/<sha>/coverage.json')`
+ * and Playwright intercepts it, so the script behaves exactly as it would in a
+ * real browser that is authed to GitHub.
  */
 
 import { createRequire } from 'node:module';
@@ -51,7 +51,7 @@ async function main() {
     // handler avoids any route-precedence ambiguity.
     await page.route('**/*', (route) => {
         const url = route.request().url();
-        if (url.includes('/raw/refs/gutterhub/')) {
+        if (url.includes('refs/gutterhub/') && url.includes('raw.githubusercontent.com')) {
             console.log('[route] raw-ref fetch intercepted:', url);
             return route.fulfill({
                 status: 200,
