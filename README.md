@@ -2,6 +2,8 @@
 
 Zero-data-residency, serverless code coverage visualization for GitHub Pull Requests. GutterHub injects rich, line-by-line coverage gutters (Green = Covered, Red = Uncovered) directly into the native GitHub PR web UI — without exporting code or metadata to any external cloud platform.
 
+![GutterHub in action on a GitHub PR diff](docs/gutterhub-demo.png)
+
 ## Problem it solves
 
 Enterprise teams under strict security and data-residency compliance can't use SaaS tools like Codecov or Coveralls, because those require parsing and storing source code diffs on external servers.
