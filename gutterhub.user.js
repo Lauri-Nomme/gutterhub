@@ -55,6 +55,15 @@
             if (/^[0-9a-f]{40}$/.test(t)) shaCandidates.add(t);
         }
 
+        // GitHub's new React diff page ships the PR head commit inside an
+        // embedded JSON payload (e.g. `"oid":"<40-hex>","shortOid":"..."`).
+        document.querySelectorAll('script:not([src])').forEach((el) => {
+            const text = el.textContent || '';
+            if (text.indexOf('"oid":"') === -1) return;
+            const oids = text.match(/"oid":"([0-9a-f]{40})"/g) || [];
+            oids.forEach((o) => { shaCandidates.add(o.slice(7, -1)); });
+        });
+
         return {
             owner,
             repo,
@@ -112,12 +121,54 @@
 
     /**
      * Parses the current visible GitHub Diff DOM tree and injects the
-     * corresponding left border metrics.
+     * corresponding left border metrics. Handles both the classic
+     * `.js-file-content` DOM and GitHub's newer React diff-grid (`/pull/N/changes`)
+     * where each file entry is a `[class*="diffEntry"]` containing a
+     * `[class*="diff-file-header"]` and rows of type `tr.diff-line-row` whose
+     * cells carry the NEW-file line number in `data-line-number`.
      */
     function paintGutterUI(coverageData) {
         if (!coverageData || !coverageData.files) return;
 
-        // Locate all file wrapper boxes inside GitHub's progressive PR diff view.
+        // New React diff-grid UI?
+        const newUIDiffHeaders = document.querySelectorAll('[class*="diff-file-header"]');
+        if (newUIDiffHeaders.length) {
+            newUIDiffHeaders.forEach((header) => {
+                const entry = header.closest('[class*="diffEntry"]')
+                    || header.closest('[class*="diffTargetable"]');
+                if (!entry) return;
+
+                const nameEl = header.querySelector('[class*="file-name"]');
+                const filePath = (nameEl ? nameEl.textContent : header.textContent)
+                    .replace(/\u200e/g, '').trim();
+                const fileCoverage = coverageData.files[filePath];
+                if (!fileCoverage) return;
+
+                entry.querySelectorAll('tr.diff-line-row').forEach((row) => {
+                    if (processedLines.has(row)) return;
+
+                    const numEl = row.querySelector('[data-line-number]');
+                    if (!numEl) return;
+                    const lineNumber = parseInt(numEl.getAttribute('data-line-number'), 10);
+                    if (isNaN(lineNumber)) return;
+
+                    // Paint the code (text) cell; fall back to the number cell.
+                    const codeCell = row.querySelector('.diff-text-cell') || numEl;
+                    if (fileCoverage.covered.includes(lineNumber)) {
+                        codeCell.style.borderLeft = '4px solid #2ea44f';
+                        codeCell.style.paddingLeft = '6px';
+                    } else if (fileCoverage.missed.includes(lineNumber)) {
+                        codeCell.style.borderLeft = '4px solid #cb2431';
+                        codeCell.style.paddingLeft = '6px';
+                    }
+
+                    processedLines.add(row);
+                });
+            });
+            return;
+        }
+
+        // Classic `.js-file-content` DOM.
         const fileContainers = document.querySelectorAll('.js-file-content');
 
         fileContainers.forEach((container) => {
