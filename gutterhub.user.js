@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         GutterHub: On-Prem Code Coverage Visualizer
 // @namespace    https://gutterhub.dev/
-// @version      1.1.0
+// @version      1.2.0
 // @description  Zero-SaaS line-by-line coverage gutters for GitHub PRs using native browser sessions.
 // @author       GutterHub Core
 // @match        https://github.com/*/*/pull/*
