@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         GutterHub: On-Prem Code Coverage Visualizer
 // @namespace    https://gutterhub.dev/
-// @version      1.0.0
+// @version      1.1.0
 // @description  Zero-SaaS line-by-line coverage gutters for GitHub PRs using native browser sessions.
 // @author       GutterHub Core
 // @match        https://github.com/*/*/pull/*
 // @match        https://*.github.com/*/*/pull/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=github.com
+// @updateURL    https://raw.githubusercontent.com/Lauri-Nomme/gutterhub/master/gutterhub.user.js
+// @downloadURL  https://raw.githubusercontent.com/Lauri-Nomme/gutterhub/master/gutterhub.user.js
 // @grant        none
 // @run-at       document-end
 // ==/UserScript==
